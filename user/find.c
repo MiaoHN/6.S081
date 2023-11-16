@@ -26,7 +26,7 @@ find(char* dir, char *name)
     return;
   }
   if (strlen(dir) + 1 + DIRSIZ + 1 > sizeof buf) {
-    printf("find: path too long\n");
+    fprintf(2, "find: path too long\n");
     close(fd);
     return;
   }
@@ -42,7 +42,7 @@ find(char* dir, char *name)
     if (strcmp(p, ".") == 0 || strcmp(p, "..") == 0)
       continue;
     if (strcmp(p, name) == 0) {
-      printf("%s\n", buf);
+      fprintf(1, "%s\n", buf);
     }
     find(buf, name);
   }
@@ -53,7 +53,7 @@ int
 main(int argc, char *argv[])
 {
   if (argc != 3) {
-    printf("usage: find dir name\n");
+    fprintf(2, "usage: find dir name\n");
     exit(1);
   }
 

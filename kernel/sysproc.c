@@ -11,6 +11,7 @@ sys_exit(void)
 {
   int n;
   argint(0, &n);
+  myproc()->tracemask = 0;
   exit(n);
   return 0;  // not reached
 }
@@ -90,4 +91,17 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_trace(void)
+{
+  int mask;
+
+  argint(0, &mask);
+
+  // TODO
+  myproc()->tracemask = mask;
+
+  return 0;
 }

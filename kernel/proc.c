@@ -12,6 +12,8 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
+int nproc = 0;
+
 int nextpid = 1;
 struct spinlock pid_lock;
 
@@ -90,6 +92,12 @@ myproc(void)
 }
 
 int
+getnproc(void)
+{
+  return nproc;
+}
+
+int
 allocpid()
 {
   int pid;
@@ -147,6 +155,8 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  nproc++;
+
   return p;
 }
 
@@ -170,6 +180,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  nproc--;
 }
 
 // Create a user page table for a given process, with no user memory,

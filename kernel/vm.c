@@ -456,11 +456,7 @@ vmprintmeta(int level, uint64 va, pte_t *pte)
   for (int i = 2; i > level; --i) {
     printf(".. ");
   }
-  printf("..%d: pte 0x", va);
-  print_uint64(*pte);
-  printf(" pa 0x");
-  print_uint64(PTE2PA(*pte));
-  printf("\n");
+  printf("..%d: pte %p pa %p\n", va, *pte, PTE2PA(*pte));
 }
 
 void

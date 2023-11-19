@@ -437,3 +437,57 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+void
+print_uint64(uint64 value) {
+  char buffer[17];
+  const char *hex_digits = "0123456789abcdef";
+  for (int i = 15; i >= 0; --i) {
+    buffer[i] = hex_digits[value & 0xf];
+    value >>= 4;
+  }
+  buffer[16] = '\0';
+  printf("%s", buffer);
+}
+
+void
+vmprintmeta(int level, uint64 va, pte_t *pte)
+{
+  for (int i = 2; i > level; --i) {
+    printf(".. ");
+  }
+  printf("..%d: pte 0x", va);
+  print_uint64(*pte);
+  printf(" pa 0x");
+  print_uint64(PTE2PA(*pte));
+  printf("\n");
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table 0x");
+  print_uint64((uint64)pagetable);
+  printf("\n");
+
+  for (uint64 va = 0; va < 512; ++va) {
+    pte_t *pte = &pagetable[PX(2, (va << 30))];
+    if (*pte & PTE_V) {
+      vmprintmeta(2, va, pte);
+      pagetable_t pg1 = (pagetable_t)PTE2PA(*pte);
+      for (uint64 va1 = 0; va1 < 512; ++va1) {
+        pte_t *pte1 = &pg1[PX(1, (va1 << 21))];
+        if (*pte1 & PTE_V) {
+          vmprintmeta(1, va1, pte1);
+          pagetable_t pg0 = (pagetable_t)PTE2PA(*pte1);
+          for (uint64 va0 = 0; va0 < 512; ++va0) {
+            pte_t *pte0 = &pg0[PX(0, (va0 << 12))];
+            if (*pte0 & PTE_V) {
+              vmprintmeta(0, va0, pte0);
+            }
+          }
+        }
+      }
+    }
+  }
+}

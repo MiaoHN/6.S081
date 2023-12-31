@@ -1,0 +1,79 @@
+> Which registers contain arguments to functions? For example, which register holds 13 in main's call to `printf`?
+
+直接看代码：
+
+```asm
+000000000000001c <main>:
+
+void main(void) {
+  1c: 1141                 addi sp,sp,-16
+  1e: e406                 sd ra,8(sp)
+  20: e022                 sd s0,0(sp)
+  22: 0800                 addi s0,sp,16
+  printf("%d %d\n", f(8)+1, 13);
+  24: 4635                 li a2,13
+  26: 45b1                 li a1,12
+  28: 00000517             auipc a0,0x0
+  2c: 7b850513             addi a0,a0,1976 # 7e0 <malloc+0xe6>
+  30: 00000097             auipc ra,0x0
+  34: 612080e7             jalr 1554(ra) # 642 <printf>
+  exit(0);
+  38: 4501                 li a0,0
+  3a: 00000097             auipc ra,0x0
+  3e: 28e080e7             jalr 654(ra) # 2c8 <exit>
+```
+{: file="user/call.asm:37" }
+
+在 24 和 26 这两行分别向 `a2` 和 `a1` 两个寄存器存了 13、12 这两个值。所以可以回答这个问题，函数的寄存器存在 `a1`~`a7` 这些寄存器中（查查 RISC-V 寄存器也能知道）
+
+> Where is the call to function `f` in the assembly code for `main`? Where is the call to `g`? (Hint: the compiler may inline functions.)
+
+还是上面那段代码，`a1` 和 `a2` 存了两个立即数，这个 12 其实就是 `f(8)+1` 的结果。所以说编译器在编译的过程中直接将 `f` 和 `g` 的调用进行内联，直接用它们的结果进行编译了
+
+> At what address is the function `printf` located?
+
+```asm
+0000000000000642 <printf>:
+```
+{: file="user/call.asm:1095" }
+
+所以 `printf` 这个函数的地址位于 0x642。这个问题一出来，就会很自然地想到下面的问题：
+
+> What value is in the register `ra` just after the `jalr` to `printf` in `main`?
+
+在 `main` 中有一句 `jalr 1554(ra)`，这应该是在 `ra` 的基础上加 1554，而且这是一个十进制立即数，那么 0x642 减去这个立即数得到的结果是 48，转换为十六进制就是 0x30，这正好是 `jalr` 跳转的上一句地址
+
+> 我还查了一下 `auipc ra, 0x0` 的含义：
+>
+> 这是一个 RISC-V 指令，用于将一个 20 位的立即数（偏移量）加到当前指令的地址的高 20 位上，结果存储在目标寄存器 `ra` 中
+>
+> 具体来说，`auipc` 指令将当前指令的地址的高 20 位（即 `PC[31:12]`）与一个 20 位的立即数相加，得到一个 32 位的地址，然后将这个地址存储在目标寄存器 `ra` 中。这个指令通常用于计算全局地址，例如用于加载全局变量的地址
+>
+> **例如，如果当前指令的地址是 0x1000，那么执行 `auipc ra, 0x0` 指令后，目标寄存器 `ra` 将被设置为 0x1000**
+{: .prompt-tip}
+
+> Run the following code.
+>
+> ```c
+> unsigned int i = 0x00646c72;
+> printf("H%x Wo%s", 57616, &i);
+> ```
+>
+> What is the output? [Here's an ASCII table](http://web.cs.mun.ca/~michael/c/ascii-table.html) that maps bytes to characters.
+>
+> The output depends on that fact that the RISC-V is little-endian. If the RISC-V were instead big-endian what would you set i to in order to yield the same output? Would you need to change 57616 to a different value?
+>
+> [Here's a description of little- and big-endian](http://www.webopedia.com/TERM/b/big_endian.html) and [a more whimsical description](http://www.networksorcery.com/enp/ien/ien137.txt).
+
+这个问题考察我们对大端小端的理解，下面先来进行一个分析。首先是 `"H%x"`，这个 `%x` 打印的是 57616 的 16 进制值，跟大小端没关系，所以打印的第一个值必定是 `HE110`。然后是这个 `"Wo%s"`，将一个无符号整数转换为字符串，因为 RISC-V 是小端存储，所以低地址在前，高地址在后，所以打印的字符应该分别为 `72`、`6c`、`64` 以及 `00`（字符串结束），ASCII 转码后打印得到的是 `rld`。现在可以对这个问题进行一个解答：
+
+1. 因为 RISC-V 是小端存储，所以全部的输出为：`HE110 World`
+2. 如果是大端存储，因为 `57616` 直接打印值，所以不需要改变；而 `i` 需要改变，应改为 `0x726c6400`
+
+> In the following code, what is going to be printed after `y=`? (note: the answer is not a specific value.) Why does this happen?
+>
+> ```c
+> printf("x=%d y=%d", 3);
+> ```
+
+`y=` 后的数字不确定，其数值取决于调用 `printf` 时第二个寄存器 `a2` 上的值。发生这种情况的原因是 `printf` 内有两个变量需要输出，但在后面的列表中只给了一个值，第二个值未给定，导致了输出结果的不确定

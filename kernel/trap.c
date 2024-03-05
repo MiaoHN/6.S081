@@ -29,6 +29,38 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int cow_uncopied(pagetable_t pgtbl, uint64 va) {
+  if (va >= MAXVA) return 0;
+  pte_t * pte = walk(pgtbl, va, 0);
+  if (pte == 0) return 0;
+  if ((*pte & PTE_V) == 0) return 0;
+  if ((*pte & PTE_U) == 0) return 0;
+  return ((*pte) & PTE_C);
+}
+
+int cow_alloc(pagetable_t pgtbl, uint64 va) {
+  pte_t *pte = walk(pgtbl, va, 0);
+  if (pte == 0) return -1;
+  uint flags = PTE_FLAGS(*pte);
+
+  uint64 pa = PTE2PA(*pte);
+
+  char *mem = kalloc();
+  if (mem == 0) return -1;
+
+  va = PGROUNDDOWN(va);
+  flags &= (~PTE_C);
+  flags |= PTE_W;
+
+  memmove(mem, (char*)pa, PGSIZE);
+  uvmunmap(pgtbl, va, 1, 1);
+  if (mappages(pgtbl, va, PGSIZE, (uint64)mem, flags) < 0) {
+    kfree(mem);
+    return -1;
+  }
+  return 0;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -65,6 +97,10 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (r_scause() == 15 && cow_uncopied(p->pagetable, r_stval())) {
+    if (cow_alloc(p->pagetable, r_stval()) < 0) {
+      setkilled(p);
+    }
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

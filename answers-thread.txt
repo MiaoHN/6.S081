@@ -1,0 +1,5 @@
+100000 puts, 5.077 seconds, 19698 puts/second
+0: 16433 keys missing
+1: 16433 keys missing
+200000 gets, 12.022 seconds, 16636 gets/second
+

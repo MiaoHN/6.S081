@@ -100,7 +100,6 @@ bget(uint dev, uint blockno)
       return b;
     }
   }
-  release(&bcache.head_lock[hash_idx]);
 
   // Not cached.
   // Recycle the least recently used unused buffer.
@@ -117,7 +116,6 @@ bget(uint dev, uint blockno)
     // Find an available buffer
     uint no = b->blockno;
     if (no % NBUCKET == hash_idx) {
-      acquire(&bcache.head_lock[hash_idx]);
       b->dev = dev;
       b->blockno = blockno;
       b->valid = 0;
@@ -138,7 +136,6 @@ bget(uint dev, uint blockno)
     b->prev->next = b->next;
     release(&bcache.head_lock[no % NBUCKET]);
 
-    acquire(&bcache.head_lock[hash_idx]);
     b->next = bcache.head[hash_idx].next;
     b->prev = &bcache.head[hash_idx];
     bcache.head[hash_idx].next->prev = b;

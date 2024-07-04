@@ -9,6 +9,8 @@
 #include "riscv.h"
 #include "defs.h"
 
+#define TOTAL_STEAL 64
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -92,26 +94,32 @@ kalloc(void)
   int cpu_id = cpuid();
 
   acquire(&kmem[cpu_id].lock);
-  r = kmem[cpu_id].freelist;
-  if(r) {
-    kmem[cpu_id].freelist = r->next;
-  } else {
+  if (!kmem[cpu_id].freelist) {
     // no enough space, try to steal space from other cpu
+    int list_left = TOTAL_STEAL;
     for (int i = 0; i < NCPU; i++) {
       if (i == cpu_id) continue;
       acquire(&kmem[i].lock);
       struct run *r_other_cpu = kmem[i].freelist;
-      if (r_other_cpu) {
+      while (r_other_cpu && list_left) {
         // find free space, steal!
         kmem[i].freelist = r_other_cpu->next;
-        r = r_other_cpu;
-        release(&kmem[i].lock);
-        break;
+        r_other_cpu->next = kmem[cpu_id].freelist;
+        kmem[cpu_id].freelist = r_other_cpu;
+        r_other_cpu = kmem[i].freelist;
+        list_left--;
       }
       release(&kmem[i].lock);
+      if (list_left == 0) break;
     }
   }
   release(&kmem[cpu_id].lock);
+
+  r = kmem[cpu_id].freelist;
+  if(r) {
+    kmem[cpu_id].freelist = r->next;
+  }
+
   pop_off();
 
   if(r)

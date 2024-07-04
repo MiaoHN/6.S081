@@ -28,8 +28,6 @@
 extern uint ticks;
 
 struct {
-  // Used for eviction.
-  struct spinlock lock;
   struct buf buf[NBUF];
 
   // Linked list of all buffers, through prev/next.
@@ -59,8 +57,6 @@ void
 binit(void)
 {
   struct buf *b;
-
-  initlock(&bcache.lock, "bcache");
 
   // Create linked list of buffers
   for (int i = 0; i < NBUCKET; i++) {

@@ -2,6 +2,19 @@
 
 My code and solutions for the MIT 6.S081 Operating System Engineering course.
 
+## Labs
+
+- [x] Lab 1: Utility
+- [x] Lab 2: System calls
+- [x] Lab 3: Page tables
+- [x] Lab 4: Traps
+- [x] Lab 5: Copy-on-write
+- [x] Lab 6: Multithreading
+- [x] Lab 7: Networking
+- [x] Lab 8: Locks
+- [x] Lab 9: File system
+- [ ] Lab 10: Mmap
+
 You can visit my [lab notes](https://miaohn.github.io/posts/mit-6-s081-0x00/) for more information.
 
 ## Initial README

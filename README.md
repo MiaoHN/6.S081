@@ -13,7 +13,7 @@ My code and solutions for the MIT 6.S081 Operating System Engineering course.
 - [x] Lab 7: Networking
 - [x] Lab 8: Locks
 - [x] Lab 9: File system
-- [ ] Lab 10: Mmap
+- [x] Lab 10: Mmap
 
 You can visit my [lab notes](https://miaohn.github.io/posts/mit-6-s081-0x00/) for more information.
 

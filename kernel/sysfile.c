@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -507,11 +508,176 @@ sys_pipe(void)
 uint64
 sys_mmap(void)
 {
-  return -1;
+  uint64 addr;
+  int sz, prot, flags, fd, offset;
+  struct file *f;
+  struct proc *p = myproc();
+
+  argaddr(0, &addr);
+  argint(1, &sz);
+  argint(2, &prot);
+  argint(3, &flags);
+  if (argfd(4, &fd, &f) < 0)
+    return -1;
+  argint(5, &offset);
+
+  if ((!f->readable && (prot & PROT_READ)) || (!f->writable && (prot & PROT_WRITE) && !(flags & MAP_PRIVATE)))
+    return -1;
+
+  sz = PGROUNDUP(sz);
+
+  struct vma* v = 0;
+
+  uint64 vmaend = VMAEND;
+
+  for (int i = 0; i < NVMA; i++) {
+    if (!p->vma[i].valid) {
+      v = &p->vma[i];
+      v->valid = 1;
+      break;
+    }
+    if (p->vma[i].addr < vmaend) {
+      vmaend = PGROUNDDOWN(p->vma[i].addr);
+    }
+  }
+
+  if (v == 0)
+    panic("mmap: no free space.");
+
+
+  v->addr = vmaend - sz;
+  v->sz = sz;
+  v->prot = prot;
+  v->flags = flags;
+  v->f = f;
+  v->offset = offset;
+
+  filedup(f);
+
+  return v->addr;
 }
 
 uint64
 sys_munmap(void)
 {
-  return -1;
+  uint64 addr;
+  int sz;
+
+  argaddr(0, &addr);
+  argint(1, &sz);
+
+  struct proc *p = myproc();
+  struct vma *v = 0;
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vma[i].valid && p->vma[i].addr <= addr && addr < p->vma[i].addr + p->vma[i].sz) {
+      v = &p->vma[i];
+      break;
+    }
+  }
+
+  if (v == 0) {
+    return -1;
+  }
+
+  if (addr > v->addr && addr + sz < v->addr + v->sz) {
+    return -1;
+  }
+
+  uint64 aaddr = addr;
+  if (addr > v->addr) {
+    aaddr = PGROUNDUP(addr);
+  }
+
+  int nbytes = sz - (aaddr - addr); // bytes to unmap
+  if (nbytes < 0) {
+    nbytes = 0;
+  }
+
+  vmaunmap(p->pagetable, aaddr, nbytes, v);
+
+  if (addr <= v->addr && addr + sz > v->addr) {
+    v->offset += addr + sz - v->addr;
+    v->addr = addr + sz;
+  }
+  v->sz -= sz;
+
+  if (v->sz <= 0) {
+    fileclose(v->f);
+    v->valid = 0;
+  }
+
+  return 0;
+}
+
+int
+vmatryalloc(uint64 va) {
+  struct proc *p = myproc();
+  struct vma *v = 0;
+
+  for (int i = 0; i < NVMA; i++) {
+    if (p->vma[i].valid && p->vma[i].addr <= va && va < p->vma[i].addr + p->vma[i].sz) {
+      v = &p->vma[i];
+      break;
+    }
+  }
+
+  if (v == 0) {
+    printf("vmatryalloc(): cannot find vma contain specific addr %p\n", va);
+    return -1;
+  }
+
+  void *pa = kalloc();
+  if (pa == 0)
+    panic("vmatryalloc(): kalloc");
+  memset(pa, 0, PGSIZE);
+
+  begin_op();
+  ilock(v->f->ip);
+  readi(v->f->ip, 0, (uint64)pa, v->offset + PGROUNDDOWN(va - v->addr), PGSIZE);
+  iunlock(v->f->ip);
+  end_op();
+
+  if (mappages(p->pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W | PTE_U) < 0)
+    panic("vmatryalloc(): mappages");
+
+  return 0;
+}
+
+void
+vmaunmap(pagetable_t pagetable, uint64 va, uint64 nbytes, struct vma *v)
+{
+  uint64 a;
+  pte_t *pte;
+
+  if((va % PGSIZE) != 0)
+    panic("vmaunmap: not aligned");
+
+  for(a = va; a < va + nbytes; a += PGSIZE){
+    if((pte = walk(pagetable, a, 0)) == 0)
+      continue;
+    if(PTE_FLAGS(*pte) == PTE_V)
+      panic("uvmunmap: not a leaf");
+    if(*pte & PTE_V) {
+      uint64 pa = PTE2PA(*pte);
+      if ((*pte & PTE_D) && (v->flags & MAP_SHARED)) {
+        begin_op();
+        ilock(v->f->ip);
+        uint64 off = a - v->addr;
+        if (off < 0) {
+          // the first page is not full
+          writei(v->f->ip, 0, pa + (-off), v->offset, PGSIZE + off);
+        } else if (off + PGSIZE > v->sz) {
+          // the last page is not full
+          writei(v->f->ip, 0, pa, v->offset + off, v->sz - off);
+        } else {
+          // full page
+          writei(v->f->ip, 0, pa, v->offset + off, PGSIZE);
+        }
+        iunlock(v->f->ip);
+        end_op();
+      }
+      kfree((void*)pa);
+      *pte = 0;
+    }
+  }
 }

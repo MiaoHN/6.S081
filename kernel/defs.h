@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct vma;
 
 // bio.c
 void            binit(void);
@@ -140,6 +141,10 @@ void            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
+
+// sysfile.c
+int             vmatryalloc(uint64 va);
+void            vmaunmap(pagetable_t pagetable, uint64 va, uint64 sz, struct vma *v);
 
 // trap.c
 extern uint     ticks;
